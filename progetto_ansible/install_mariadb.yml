@@ -1,0 +1,73 @@
+---
+- name: Setup Database Server
+  hosts: databases
+  become: yes
+  vars:
+    db_name: spesa_db
+    db_user: user_spesa
+    db_pass: PasswordSegreta123
+    mysql_packages:
+      - mariadb-server
+      - python3-pymysql
+
+  tasks:
+    - name: Installa MariaDB e Librerie Python
+      apt:
+        name: "{{ mysql_packages }}"
+        state: present
+        update_cache: yes
+
+    - name: Configura MariaDB per accettare connessioni esterne
+      copy:
+        dest: /etc/mysql/mariadb.conf.d/99-external-access.cnf
+        content: |
+          [mysqld]
+          bind-address = 0.0.0.0
+      notify: Restart DB
+
+    - name: Avvia e Abilita MariaDB
+      service: name=mariadb state=started enabled=yes
+
+    - name: Apri porta 3306 nel Firewall (UFW)
+      ufw:
+        rule: allow
+        port: '3306'
+        proto: tcp
+
+    - name: Crea Database
+      community.mysql.mysql_db:
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        name: "{{ db_name }}"
+        state: present
+
+    - name: Crea Utente Remoto
+      community.mysql.mysql_user:
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        name: "{{ db_user }}"
+        password: "{{ db_pass }}"
+        priv: "{{ db_name }}.*:ALL"
+        host: '%'
+        state: present
+
+    - name: Crea Tabella e Inserisci Dati
+      community.mysql.mysql_query:
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        login_db: "{{ db_name }}"
+        query:
+          - "CREATE TABLE IF NOT EXISTS spesa (id INT AUTO_INCREMENT PRIMARY KEY, item VARCHAR(255))"
+          - "INSERT IGNORE INTO spesa (id, item) VALUES (1, 'Pasta'), (2, 'Vino'), (3, 'Configurazione Pulita OK!')"
+
+    - name: Leggi dati dal Database per verifica
+      community.mysql.mysql_query:
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        login_db: "{{ db_name }}"
+        query: "SELECT * FROM spesa"
+      register: db_content
+
+    - name: STAMPA RISULTATO LETTURA
+      debug:
+        msg: "Il Database contiene: {{ db_content.query_result[0] }}"
+
+  handlers:
+    - name: Restart DB
+      service: name=mariadb state=restarted
