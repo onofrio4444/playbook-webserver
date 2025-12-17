@@ -1,0 +1,60 @@
+---
+- name: Generate Ansible SSH key on controller
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  vars:
+    ansible_key_path: /root/.ssh/ansible
+
+  tasks:
+    - name: Ensure .ssh directory exists
+      file:
+        path: "{{ ansible_key_path | dirname }}"
+        state: directory
+        mode: '0700'
+
+    - name: Generate ansible ed25519 key if missing
+      command: >
+        ssh-keygen -t ed25519 -C "ansible"
+        -f {{ ansible_key_path }} -N ""
+      args:
+        creates: "{{ ansible_key_path }}"
+
+- name: Setup Service Account Ansible on all hosts
+  hosts: all
+  remote_user: root
+  become: yes
+  gather_facts: yes
+
+  vars:
+    target_user: ansible
+    pub_key: "{{ lookup('file', '/root/.ssh/ansible.pub') }}"
+
+  tasks:
+    - name: Crea account di servizio ansible
+      user:
+        name: "{{ target_user }}"
+        comment: "Ansible Automation Service Account"
+        system: yes
+        shell: /bin/bash
+        create_home: yes
+        home: /home/ansible
+        groups: "{{ 'wheel' if ansible_os_family == 'RedHat' else 'sudo' }}"
+        append: yes
+        state: present
+
+    - name: Deploy chiave SSH per il service account
+      authorized_key:
+        user: "{{ target_user }}"
+        key: "{{ pub_key }}"
+        state: present
+
+    - name: Configura Sudoers senza password
+      lineinfile:
+        path: /etc/sudoers
+        state: present
+        regexp: '^ansible ALL='
+        line: '{{ target_user }} ALL=(ALL) NOPASSWD: ALL'
+        validate: 'visudo -cf %s'
+
