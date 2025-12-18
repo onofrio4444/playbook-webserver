@@ -1,0 +1,5 @@
+db_name: spesa_db
+db_user: user_spesa
+db_host: 172.28.10.16
+db_pass: "{{ vault_db_pass }}" 
+ansible_key_path: /root/.ssh/ansible

@@ -1,0 +1,39 @@
+
+- name: Install Nginx and PHP (Direct Shell)
+  ansible.builtin.shell: yum install -y --nogpgcheck nginx php-fpm php-mysqlnd php-cli
+  register: yum_result
+  changed_when: "'Nothing to do' not in yum_result.stdout"
+
+- name: Configure PHP-FPM
+  ansible.builtin.lineinfile:
+    path: /etc/php-fpm.d/www.conf
+    regexp: '^listen = '
+    line: 'listen = 127.0.0.1:9000'
+  notify: Restart PHP
+
+- name: Deploy PHP App (Using Template)
+  ansible.builtin.template:
+    src: index.php.j2
+    dest: /usr/share/nginx/html/index.php
+
+- name: Deploy Nginx Config (Using Template)
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+  notify: Restart Nginx
+
+- name: Start Services
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  loop: [nginx, php-fpm]
+
+- name: Open Firewall Port 80 (HTTP)
+  ansible.builtin.shell: firewall-cmd --permanent --add-service=http && firewall-cmd --reload
+  ignore_errors: yes
+ 
+
+- name: Set SELinux to Permissive (Fix 502 errors)
+  ansible.builtin.shell: setenforce 0
+  ignore_errors: yes

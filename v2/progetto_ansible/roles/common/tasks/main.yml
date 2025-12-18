@@ -1,0 +1,27 @@
+---
+- name: Gather Service Facts 
+  ansible.builtin.service_facts:
+
+- name: Stampa stato servizio SSH per verifica
+  ansible.builtin.debug:
+    var: ansible_facts.services['ssh.service'].state
+
+- name: Crea account di servizio ansible
+  ansible.builtin.user:
+    name: ansible
+    groups: "{{ 'wheel' if ansible_os_family == 'RedHat' else 'sudo' }}"
+    append: yes
+    state: present
+
+- name: Deploy chiave SSH pubblica
+  ansible.posix.authorized_key:
+    user: ansible
+    key: "{{ lookup('file', ansible_key_path + '.pub') }}"
+    state: present
+
+- name: Configura Sudoers
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers
+    regexp: '^ansible ALL='
+    line: 'ansible ALL=(ALL) NOPASSWD: ALL'
+    validate: 'visudo -cf %s'

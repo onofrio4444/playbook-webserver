@@ -1,0 +1,87 @@
+---
+# PRE-TASK: Setup Controller
+- name: Setup Controller
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  tasks:
+    - name: Ensure .ssh directory exists
+      ansible.builtin.file:
+        path: "{{ ansible_key_path | dirname }}"
+        state: directory
+        mode: '0700'
+    - name: Generate ansible ed25519 key if missing
+      community.crypto.openssh_keypair:
+        path: "{{ ansible_key_path }}"
+        type: ed25519
+        state: present
+
+- name: Bootstrap Python 3.8 on Webservers
+  hosts: webservers
+  remote_user: root
+  gather_facts: no
+  become: yes
+  tasks:
+    - name: Nuclear Fix for SCL Repos and Python Install
+      ansible.builtin.raw: |
+        # 1. Installa SCL e strumenti di gestione repo
+        yum install -y centos-release-scl yum-utils
+
+        # 2. Disabilita ESPLICITAMENTE i repo rotti (questo ferma l'errore "Cannot find baseurl")
+        yum-config-manager --disable centos-sclo-sclo centos-sclo-rh
+
+        # 3. Crea il file per il Vault (usando HTTP per evitare errori SSL)
+        echo '[centos-sclo-rh-vault]
+        name=CentOS-7 - SCLo rh
+        baseurl=http://vault.centos.org/7.9.2009/sclo/$basearch/rh/
+        gpgcheck=0
+        enabled=1
+
+        [centos-sclo-sclo-vault]
+        name=CentOS-7 - SCLo sclo
+        baseurl=http://vault.centos.org/7.9.2009/sclo/$basearch/sclo/
+        gpgcheck=0
+        enabled=1' > /etc/yum.repos.d/CentOS-SCL-Vault.repo
+
+        # 4. Pulisci tutto drasticamente
+        yum clean all
+        rm -rf /var/cache/yum
+
+        # 5. Ora l'installazione DEVE funzionare
+        yum install -y rh-python38
+
+        # 6. Link simbolico
+        ln -sf /opt/rh/rh-python38/root/usr/bin/python3 /usr/bin/python3.8
+      changed_when: false
+
+# PLAY 1: Common
+- name: Apply Common Configuration
+  hosts: all
+  remote_user: root
+  become: yes
+  roles:
+    - common
+
+# PLAY 2: Database
+- name: Configure Database
+  hosts: databases
+  remote_user: root
+  become: yes
+  roles:
+    - database
+
+# PLAY 3: Web Servers
+- name: Configure Web Servers
+  hosts: webservers
+  remote_user: root
+  become: yes
+  roles:
+    - webserver
+
+# PLAY 4: Load Balancer
+- name: Configure Load Balancer
+  hosts: loadbalancers
+  remote_user: root
+  become: yes
+  roles:
+    - loadbalancer

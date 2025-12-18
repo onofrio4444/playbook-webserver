@@ -1,0 +1,17 @@
+---
+- name: Install Nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: latest
+
+- name: Configure Load Balancer (Using Template)
+  ansible.builtin.template:
+    src: lb.conf.j2
+    dest: /etc/nginx/conf.d/loadbalancer.conf
+  notify: Restart Nginx
+
+- name: Remove default site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Restart Nginx

@@ -1,0 +1,37 @@
+---
+- name: Install MariaDB
+  ansible.builtin.apt:
+    name:
+      - mariadb-server
+      - python3-pymysql
+    state: present
+    update_cache: yes
+
+- name: Configure MariaDB (Using Template)
+  ansible.builtin.template:
+    src: mariadb_external.cnf.j2
+    dest: /etc/mysql/mariadb.conf.d/99-external-access.cnf
+  notify: Restart DB
+
+- name: Setup DB (FIXED SOCKET)
+  community.mysql.mysql_db:
+    name: "{{ db_name }}"
+    state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock  # <--- AGGIUNGI QUESTO
+
+- name: Setup DB User (FIXED SOCKET)
+  community.mysql.mysql_user:
+    name: "{{ db_user }}"
+    password: "{{ db_pass }}"
+    priv: "{{ db_name }}.*:ALL"
+    host: '%'
+    state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock  # <--- AGGIUNGI QUESTO
+
+- name: Crea Tabella e Inserisci Dati Iniziali (FIXED SOCKET)
+  community.mysql.mysql_query:
+    login_db: "{{ db_name }}"
+    query:
+      - "CREATE TABLE IF NOT EXISTS spesa (id INT AUTO_INCREMENT PRIMARY KEY, item VARCHAR(255))"
+      - "INSERT IGNORE INTO spesa (id, item) VALUES (1, 'Pasta'), (2, 'Vino'), (3, 'Configurazione Enterprise OK!')"
+    login_unix_socket: /var/run/mysqld/mysqld.sock
