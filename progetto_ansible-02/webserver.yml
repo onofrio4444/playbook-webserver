@@ -1,4 +1,0 @@
----
-- import_playbook: install_loadbalancers.yml
-- import_playbook: install_mariadb.yml
-- import_playbook: install_nginx.yml
